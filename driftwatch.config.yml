@@ -1,0 +1,12 @@
+telegram:
+  bot_token: '${TELEGRAM_TOKEN}'
+  chat_id: '${CHAT_ID}'
+
+endpoints:
+  - name: 'Cards'
+    url: 'http://localhost:8000/api/cards?company_id=019e7c49-0097-7104-9f16-40f27e5b0b0e'
+    method: GET
+    headers:
+      Authorization: 'Bearer ${API_TOKEN}'
+      Accept: 'application/json'
+    interval: '* * * * *'

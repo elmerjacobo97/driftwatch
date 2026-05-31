@@ -1,0 +1,52 @@
+{
+  "name": "@codigoconelmer/driftwatch",
+  "version": "1.0.0",
+  "description": "External API schema drift detector with Telegram alerts",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "driftwatch": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "prepublishOnly": "pnpm build"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "api",
+    "schema",
+    "drift",
+    "monitor",
+    "telegram",
+    "cli"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.7",
+    "js-yaml": "^4.1.0",
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/node-telegram-bot-api": "^0.64.14",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

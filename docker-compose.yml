@@ -1,0 +1,11 @@
+services:
+  driftwatch:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./driftwatch.config.yml:/app/driftwatch.config.yml:ro
+      - driftwatch-snapshots:/app/.driftwatch/snapshots
+
+volumes:
+  driftwatch-snapshots:

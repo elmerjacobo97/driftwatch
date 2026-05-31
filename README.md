@@ -28,9 +28,9 @@ DriftWatch periodically hits your API endpoints and extracts their response **sc
 ## Install
 
 ```bash
-npm install -g driftwatch
+npm install -g @codigoconelmer/driftwatch
 # or
-pnpm add -g driftwatch
+pnpm add -g @codigoconelmer/driftwatch
 ```
 
 ---

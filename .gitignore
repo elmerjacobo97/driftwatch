@@ -30,6 +30,9 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 
+# Internal docs (not for public)
+docs/
+
 # AI tools
 .claude/
 .agents/

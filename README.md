@@ -53,7 +53,7 @@ The CLI will ask you everything — endpoint URLs, auth tokens, check interval, 
 ? URL: https://api.myapp.com/api/cards
 ? HTTP method: GET
 ? Requires auth header (Bearer token)? Yes
-? Env var name for token: API_TOKEN
+? Bearer token value (will be saved to .env as API_TOKEN): ********
 ? Check interval: Every 5 minutes
 ? Add another endpoint? No
 

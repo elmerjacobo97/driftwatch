@@ -1,6 +1,6 @@
 {
   "name": "@codigoconelmer/driftwatch",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "External API schema drift detector with Telegram alerts",
   "type": "module",
   "main": "dist/index.js",

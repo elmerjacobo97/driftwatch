@@ -37,41 +37,48 @@ pnpm add -g @codigoconelmer/driftwatch
 
 ## Quick start
 
-**1. Initialize config in your project**
+**1. Run the interactive setup**
 
 ```bash
 cd my-project/
 driftwatch init
 ```
 
-**2. Set up Telegram** (one-time, ~5 min)
+The CLI will ask you everything — endpoint URLs, auth tokens, check interval, and optionally Telegram. No manual YAML editing required.
 
-- Open Telegram → search `@BotFather` → send `/newbot` → copy the token
-- Send any message to your new bot
-- Open `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser
-- Copy the `chat.id` value from the JSON response
+```
+── Endpoint setup ──────────────────────────
 
-**3. Configure environment**
+? Endpoint name: Cards
+? URL: https://api.myapp.com/api/cards
+? HTTP method: GET
+? Requires auth header (Bearer token)? Yes
+? Env var name for token: API_TOKEN
+? Check interval: Every 5 minutes
+? Add another endpoint? No
 
-```bash
-cp .env.example .env
+── Telegram alerts (optional) ──────────────
+
+? Set up Telegram alerts now? Yes
+? Bot token: ********
+? Chat ID: 12345678
+
+✓ Created driftwatch.config.yml
+✓ Updated .env
+✓ Updated .env.example
+
+Run "driftwatch check" to create your first snapshot.
 ```
 
-```env
-TELEGRAM_TOKEN=your-bot-token-here
-CHAT_ID=your-chat-id-here
-API_TOKEN=your-api-token-here   # optional, only if your API requires auth
-```
+> Telegram is optional — skip it during init and add it later by setting `TELEGRAM_TOKEN` and `CHAT_ID` in `.env`. Without it, drift is logged to console only.
 
-**4. Edit `driftwatch.config.yml`** with your endpoints
-
-**5. First run** — creates snapshots, no alerts sent
+**2. First run** — creates snapshots, no alerts sent
 
 ```bash
 driftwatch check
 ```
 
-**6. Start the daemon**
+**3. Start the daemon**
 
 ```bash
 driftwatch start
@@ -132,13 +139,31 @@ driftwatch check -c /path/to/cfg.yml   # custom config path
 
 ---
 
+## Telegram setup (optional)
+
+1. Open Telegram → search `@BotFather` → send `/newbot` → copy the token
+2. Send any message to your new bot
+3. Open `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in browser
+4. Copy the `chat.id` from the JSON response
+5. Add to `.env`:
+
+```env
+TELEGRAM_TOKEN=your-bot-token
+CHAT_ID=your-chat-id
+```
+
+Without Telegram configured, drift is logged to console only — no alerts sent.
+
+---
+
 ## How it works
 
 1. **First run per endpoint** — saves the response schema to `.driftwatch/snapshots/<name>.json`. No alert sent.
 2. **Subsequent runs** — compares live schema against the snapshot.
    - No change → logs "no drift", no alert.
-   - Change detected → sends Telegram alert, updates snapshot as new baseline.
+   - Change detected → logs drift + sends Telegram alert (if configured), updates snapshot as new baseline.
 3. **Schema** is a recursive key+type map. Values are ignored. Arrays are sampled from the first element — nested object structure is preserved.
+4. **Auth** — supports Bearer token and any custom headers. Cookie-based auth (e.g. Sanctum sessions) is not supported — use stateless tokens only.
 
 ---
 

@@ -2,10 +2,16 @@
 import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
+import { createRequire } from 'module';
+import updateNotifier from 'update-notifier';
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { loadConfig } from './config.js';
 import { initBot, sendDriftAlert, isBotReady } from './telegram.js';
 import { startScheduler } from './scheduler.js';
+
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json') as { name: string; version: string };
+updateNotifier({ pkg }).notify();
 import { checkEndpoint } from './checker.js';
 
 const INTERVAL_CHOICES = [
@@ -68,7 +74,7 @@ const program = new Command();
 program
   .name('driftwatch')
   .description('External API schema drift detector with Telegram alerts')
-  .version('1.0.2');
+  .version(pkg.version);
 
 program
   .command('init')

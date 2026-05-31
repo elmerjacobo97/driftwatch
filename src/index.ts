@@ -106,9 +106,10 @@ program
       let authLine = '';
       if (needsAuth) {
         const varName = await input({ message: 'Env var name for token:', default: 'API_TOKEN' });
+        const tokenValue = await password({ message: `Value for ${varName} (paste your token):` });
         authVarNames.add(varName);
         authLine = `      Authorization: 'Bearer \${${varName}}'`;
-        envVars[varName] = '';
+        envVars[varName] = tokenValue;
       }
 
       let intervalValue = await select({ message: 'Check interval:', choices: INTERVAL_CHOICES });

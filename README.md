@@ -4,7 +4,7 @@ External API schema drift detector with Telegram alerts. No SDK to install in yo
 
 [![npm version](https://img.shields.io/npm/v/@codigoconelmer/driftwatch)](https://www.npmjs.com/package/@codigoconelmer/driftwatch)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-donate-orange)](https://buymeacoffee.com/)
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-blue)](https://www.paypal.me/elmerjacobo97)
 
 ---
 

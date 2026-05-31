@@ -105,11 +105,10 @@ program
       const needsAuth = await confirm({ message: 'Requires auth header (Bearer token)?', default: false });
       let authLine = '';
       if (needsAuth) {
-        const varName = await input({ message: 'Env var name for token:', default: 'API_TOKEN' });
-        const tokenValue = await password({ message: `Value for ${varName} (paste your token):` });
-        authVarNames.add(varName);
-        authLine = `      Authorization: 'Bearer \${${varName}}'`;
-        envVars[varName] = tokenValue;
+        const tokenValue = await password({ message: 'Bearer token value (will be saved to .env as API_TOKEN):' });
+        authVarNames.add('API_TOKEN');
+        authLine = `      Authorization: 'Bearer \${API_TOKEN}'`;
+        envVars['API_TOKEN'] = tokenValue;
       }
 
       let intervalValue = await select({ message: 'Check interval:', choices: INTERVAL_CHOICES });

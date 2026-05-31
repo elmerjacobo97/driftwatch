@@ -2,7 +2,7 @@
 
 External API schema drift detector with Telegram alerts. No SDK to install in your apps — runs as a standalone daemon or Docker container, pointing at any HTTP endpoint you want to monitor.
 
-[![npm version](https://img.shields.io/npm/v/driftwatch)](https://www.npmjs.com/package/driftwatch)
+[![npm version](https://img.shields.io/npm/v/@codigoconelmer/driftwatch)](https://www.npmjs.com/package/@codigoconelmer/driftwatch)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-donate-orange)](https://buymeacoffee.com/)
 

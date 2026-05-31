@@ -38,8 +38,12 @@ function formatDiff(result: CheckResult): string {
   return lines.join('\n');
 }
 
+export function isBotReady(): boolean {
+  return bot !== null;
+}
+
 export async function sendDriftAlert(chatId: string, result: CheckResult): Promise<void> {
-  if (!bot) throw new Error('Telegram bot not initialized');
+  if (!bot) return;
   const message = formatDiff(result);
   await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
 }

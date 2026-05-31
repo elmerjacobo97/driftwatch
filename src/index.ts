@@ -2,53 +2,167 @@
 import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
+import { input, select, confirm, password } from '@inquirer/prompts';
 import { loadConfig } from './config.js';
-import { initBot, sendDriftAlert } from './telegram.js';
+import { initBot, sendDriftAlert, isBotReady } from './telegram.js';
 import { startScheduler } from './scheduler.js';
 import { checkEndpoint } from './checker.js';
 
-const EXAMPLE_CONFIG = `telegram:
-  bot_token: '\${TELEGRAM_TOKEN}'
-  chat_id: '\${CHAT_ID}'
+const INTERVAL_CHOICES = [
+  { name: 'Every minute',      value: '* * * * *' },
+  { name: 'Every 5 minutes',   value: '*/5 * * * *' },
+  { name: 'Every 15 minutes',  value: '*/15 * * * *' },
+  { name: 'Every hour',        value: '0 * * * *' },
+  { name: 'Every day at 9am',  value: '0 9 * * *' },
+  { name: 'Custom cron...',    value: 'custom' },
+];
 
-endpoints:
-  - name: 'Users list'
-    url: 'https://your-app.com/api/users'
-    method: GET
-    headers:
-      Authorization: 'Bearer \${API_TOKEN}'
-    interval: '*/5 * * * *'
+const METHOD_CHOICES = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 
-  - name: 'Create order'
-    url: 'https://your-app.com/api/orders'
-    method: POST
-    headers:
-      Authorization: 'Bearer \${API_TOKEN}'
-      Content-Type: 'application/json'
-    body:
-      product_id: 1
-      quantity: 1
-    interval: '0 * * * *'
-`;
+function appendEnvVars(envPath: string, vars: Record<string, string>): void {
+  let existing = '';
+  if (fs.existsSync(envPath)) {
+    existing = fs.readFileSync(envPath, 'utf8');
+  }
+
+  const toAdd: string[] = [];
+  for (const [key, value] of Object.entries(vars)) {
+    if (!existing.includes(`${key}=`)) {
+      toAdd.push(`${key}=${value}`);
+    }
+  }
+
+  if (toAdd.length === 0) return;
+
+  const block = (existing.endsWith('\n') ? '' : '\n') +
+    '# driftwatch\n' +
+    toAdd.join('\n') + '\n';
+
+  fs.appendFileSync(envPath, block);
+}
+
+function writeEnvExample(examplePath: string, vars: Record<string, string>): void {
+  let existing = '';
+  if (fs.existsSync(examplePath)) {
+    existing = fs.readFileSync(examplePath, 'utf8');
+  }
+
+  const toAdd: string[] = [];
+  for (const [key, placeholder] of Object.entries(vars)) {
+    if (!existing.includes(`${key}=`)) {
+      toAdd.push(`${key}=${placeholder}`);
+    }
+  }
+
+  if (toAdd.length === 0) return;
+
+  const block = (existing.endsWith('\n') || existing === '' ? '' : '\n') +
+    '# driftwatch\n' +
+    toAdd.join('\n') + '\n';
+
+  fs.appendFileSync(examplePath, block);
+}
 
 const program = new Command();
 
 program
   .name('driftwatch')
   .description('External API schema drift detector with Telegram alerts')
-  .version('1.0.0');
+  .version('1.0.2');
 
 program
   .command('init')
-  .description('Generate driftwatch.config.yml in the current directory')
-  .action(() => {
-    const dest = path.resolve(process.cwd(), 'driftwatch.config.yml');
-    if (fs.existsSync(dest)) {
-      console.log('driftwatch.config.yml already exists.');
-      process.exit(1);
+  .description('Interactive setup: generates driftwatch.config.yml and updates .env')
+  .action(async () => {
+    const configDest = path.resolve(process.cwd(), 'driftwatch.config.yml');
+
+    if (fs.existsSync(configDest)) {
+      const overwrite = await confirm({ message: 'driftwatch.config.yml already exists. Overwrite?', default: false });
+      if (!overwrite) {
+        console.log('Aborted.');
+        process.exit(0);
+      }
     }
-    fs.writeFileSync(dest, EXAMPLE_CONFIG);
-    console.log('Created driftwatch.config.yml — edit it and set your env vars in .env');
+
+    console.log('\n── Endpoint setup ──────────────────────────\n');
+
+    const endpoints: string[] = [];
+    const envVars: Record<string, string> = {};
+    const authVarNames: Set<string> = new Set();
+
+    let addMore = true;
+    while (addMore) {
+      const name = await input({ message: 'Endpoint name:', validate: v => v.trim() !== '' || 'Required' });
+      const url = await input({ message: 'URL:', validate: v => v.startsWith('http') || 'Must start with http' });
+      const method = await select({ message: 'HTTP method:', choices: METHOD_CHOICES.map(m => ({ value: m })) });
+
+      const needsAuth = await confirm({ message: 'Requires auth header (Bearer token)?', default: false });
+      let authLine = '';
+      if (needsAuth) {
+        const varName = await input({ message: 'Env var name for token:', default: 'API_TOKEN' });
+        authVarNames.add(varName);
+        authLine = `      Authorization: 'Bearer \${${varName}}'`;
+        envVars[varName] = '';
+      }
+
+      let intervalValue = await select({ message: 'Check interval:', choices: INTERVAL_CHOICES });
+      if (intervalValue === 'custom') {
+        intervalValue = await input({ message: 'Cron expression:', validate: v => v.trim() !== '' || 'Required' });
+      }
+
+      const lines = [
+        `  - name: '${name}'`,
+        `    url: '${url}'`,
+        `    method: ${method}`,
+      ];
+      if (needsAuth) {
+        lines.push(`    headers:`);
+        lines.push(`${authLine}`);
+        lines.push(`      Accept: 'application/json'`);
+      }
+      lines.push(`    interval: '${intervalValue}'`);
+      endpoints.push(lines.join('\n'));
+
+      addMore = await confirm({ message: 'Add another endpoint?', default: false });
+    }
+
+    console.log('\n── Telegram alerts (optional) ──────────────\n');
+
+    const setupTelegram = await confirm({ message: 'Set up Telegram alerts now?', default: false });
+    let telegramSection = '';
+
+    if (setupTelegram) {
+      const token = await password({ message: 'Bot token:' });
+      const chatId = await input({ message: 'Chat ID:', validate: v => v.trim() !== '' || 'Required' });
+      telegramSection = `telegram:\n  bot_token: '\${TELEGRAM_TOKEN}'\n  chat_id: '\${CHAT_ID}'\n\n`;
+      envVars['TELEGRAM_TOKEN'] = token;
+      envVars['CHAT_ID'] = chatId;
+    } else {
+      telegramSection = `# telegram: (optional — add bot_token and chat_id to enable alerts)\n#   bot_token: '\${TELEGRAM_TOKEN}'\n#   chat_id: '\${CHAT_ID}'\n\n`;
+      console.log('  Skipped. Add TELEGRAM_TOKEN and CHAT_ID to .env later to enable alerts.\n');
+    }
+
+    const configContent = telegramSection + 'endpoints:\n' + endpoints.join('\n\n') + '\n';
+    fs.writeFileSync(configDest, configContent);
+    console.log('\n✓ Created driftwatch.config.yml');
+
+    const envPath = path.resolve(process.cwd(), '.env');
+    const envExamplePath = path.resolve(process.cwd(), '.env.example');
+
+    if (Object.keys(envVars).length > 0) {
+      const actualVars: Record<string, string> = {};
+      const exampleVars: Record<string, string> = {};
+      for (const [key, val] of Object.entries(envVars)) {
+        actualVars[key] = val;
+        exampleVars[key] = authVarNames.has(key) ? 'your-api-token-here' : `your-${key.toLowerCase().replace(/_/g, '-')}-here`;
+      }
+      appendEnvVars(envPath, actualVars);
+      writeEnvExample(envExamplePath, exampleVars);
+      console.log(`✓ Updated .env`);
+      console.log(`✓ Updated .env.example`);
+    }
+
+    console.log('\nRun "driftwatch check" to create your first snapshot.\n');
   });
 
 program
@@ -57,7 +171,8 @@ program
   .option('-c, --config <path>', 'Path to config file')
   .action((opts) => {
     const config = loadConfig(opts.config);
-    initBot(config.telegram.bot_token);
+    if (config.telegram?.bot_token) initBot(config.telegram.bot_token);
+    else console.log('[driftwatch] No Telegram configured — console-only mode.');
     console.log(`[driftwatch] Starting with ${config.endpoints.length} endpoint(s)...`);
     startScheduler(config);
   });
@@ -68,29 +183,34 @@ program
   .option('-c, --config <path>', 'Path to config file')
   .action(async (opts) => {
     const config = loadConfig(opts.config);
-    initBot(config.telegram.bot_token);
-    console.log(`[driftwatch] Checking ${config.endpoints.length} endpoint(s)...`);
+    if (config.telegram?.bot_token) initBot(config.telegram.bot_token);
+    else console.log('[driftwatch] No Telegram configured — console-only mode.\n');
+
+    console.log(`[driftwatch] Checking ${config.endpoints.length} endpoint(s)...\n`);
 
     for (const endpoint of config.endpoints) {
-      console.log(`\nChecking: ${endpoint.name}`);
+      console.log(`Checking: ${endpoint.name}`);
       try {
         const result = await checkEndpoint(endpoint);
         if (result.isFirstRun) {
           console.log('  First run — snapshot saved, no alert.');
         } else if (result.hasDrift) {
           const { diff } = result;
-          console.log(`  Drift detected!`);
+          console.log('  Drift detected!');
           diff.added.forEach(e => console.log(`    + ${e.path} (${e.type})`));
           diff.removed.forEach(e => console.log(`    - ${e.path} (${e.type})`));
           diff.changed.forEach(e => console.log(`    ~ ${e.path}: ${e.from} → ${e.to}`));
-          await sendDriftAlert(config.telegram.chat_id, result);
-          console.log('  Alert sent.');
+          if (isBotReady() && config.telegram?.chat_id) {
+            await sendDriftAlert(config.telegram.chat_id, result);
+            console.log('  Telegram alert sent.');
+          }
         } else {
           console.log('  No drift.');
         }
       } catch (err) {
         console.error(`  Error: ${(err as Error).message}`);
       }
+      console.log('');
     }
   });
 

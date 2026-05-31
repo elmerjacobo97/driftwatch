@@ -16,7 +16,7 @@ export interface TelegramConfig {
 }
 
 export interface Config {
-  telegram: TelegramConfig;
+  telegram?: TelegramConfig;
   endpoints: EndpointConfig[];
 }
 

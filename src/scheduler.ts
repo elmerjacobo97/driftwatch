@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { checkEndpoint } from './checker.js';
-import { sendDriftAlert } from './telegram.js';
+import { sendDriftAlert, isBotReady } from './telegram.js';
 import type { Config } from './types.js';
 
 export function startScheduler(config: Config): void {
@@ -27,8 +27,11 @@ export function startScheduler(config: Config): void {
         if (result.isFirstRun) {
           console.log(`[driftwatch] ${endpoint.name}: first run, snapshot saved.`);
         } else if (result.hasDrift) {
-          console.log(`[driftwatch] ${endpoint.name}: drift detected! Sending alert.`);
-          await sendDriftAlert(config.telegram.chat_id, result);
+          console.log(`[driftwatch] ${endpoint.name}: drift detected!`);
+          if (isBotReady() && config.telegram?.chat_id) {
+            await sendDriftAlert(config.telegram.chat_id, result);
+            console.log(`[driftwatch] ${endpoint.name}: Telegram alert sent.`);
+          }
         } else {
           console.log(`[driftwatch] ${endpoint.name}: no drift.`);
         }

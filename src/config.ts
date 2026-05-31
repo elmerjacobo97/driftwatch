@@ -29,8 +29,6 @@ export function loadConfig(configPath?: string): Config {
   const raw = yaml.load(fs.readFileSync(filePath, 'utf8'));
   const resolved = resolveEnvVars(raw) as Config;
 
-  if (!resolved.telegram?.bot_token) throw new Error('Config missing telegram.bot_token');
-  if (!resolved.telegram?.chat_id) throw new Error('Config missing telegram.chat_id');
   if (!Array.isArray(resolved.endpoints) || resolved.endpoints.length === 0) {
     throw new Error('Config must have at least one endpoint');
   }

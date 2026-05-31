@@ -27,6 +27,12 @@
     "cli"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elmerjacobo97/driftwatch"
+  },
+  "homepage": "https://github.com/elmerjacobo97/driftwatch#readme",
+  "bugs": "https://github.com/elmerjacobo97/driftwatch/issues",
   "dependencies": {
     "axios": "^1.7.9",
     "commander": "^12.1.0",

@@ -8,6 +8,8 @@ export interface EndpointConfig {
   headers?: Record<string, string>;
   body?: unknown;
   interval: string;
+  retries?: number;      // attempts after first failure, default 0
+  retry_delay?: number;  // seconds between retries, default 5
 }
 
 export interface TelegramConfig {

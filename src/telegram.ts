@@ -1,5 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import type { CheckResult } from './checker.js';
+import type { EndpointConfig } from './types.js';
 
 let bot: TelegramBot | null = null;
 
@@ -45,5 +46,17 @@ export function isBotReady(): boolean {
 export async function sendDriftAlert(chatId: string, result: CheckResult): Promise<void> {
   if (!bot) return;
   const message = formatDiff(result);
+  await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+}
+
+export async function sendDownAlert(chatId: string, endpoint: EndpointConfig, reason: string): Promise<void> {
+  if (!bot) return;
+  const message = [
+    '🔴 <b>Endpoint down!</b>',
+    '',
+    `📌 ${escapeHtml(endpoint.name)}`,
+    `🔗 ${escapeHtml(endpoint.method)} ${escapeHtml(endpoint.url)}`,
+    `💥 Error: ${escapeHtml(reason)}`,
+  ].join('\n');
   await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
 }

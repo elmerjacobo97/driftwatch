@@ -37,6 +37,7 @@ docs/
 .claude/
 .agents/
 .cursor/
+.kiro/
 .aider*
 .copilot/
 CLAUDE.md

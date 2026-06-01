@@ -6,8 +6,10 @@ import { createRequire } from 'module';
 import updateNotifier from 'update-notifier';
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { loadConfig } from './config.js';
-import { initBot, sendDriftAlert, isBotReady } from './telegram.js';
+import { initBot, sendDriftAlert, sendDownAlert, isBotReady } from './telegram.js';
 import { startScheduler } from './scheduler.js';
+import { startDaemon, stopDaemon, isDaemonRunning } from './daemon.js';
+import { readStatusData } from './status.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json') as { name: string; version: string };
@@ -175,12 +177,47 @@ program
   .command('start')
   .description('Start the scheduler daemon')
   .option('-c, --config <path>', 'Path to config file')
+  .option('-d, --daemon', 'Run as background process')
   .action((opts) => {
+    if (opts.daemon) {
+      startDaemon(opts.config);
+      return;
+    }
     const config = loadConfig(opts.config);
     if (config.telegram?.bot_token) initBot(config.telegram.bot_token);
     else console.log('[driftwatch] No Telegram configured — console-only mode.');
     console.log(`[driftwatch] Starting with ${config.endpoints.length} endpoint(s)...`);
     startScheduler(config);
+  });
+
+program
+  .command('stop')
+  .description('Stop the background daemon')
+  .action(() => {
+    stopDaemon();
+  });
+
+program
+  .command('status')
+  .description('Show daemon state and last check per endpoint')
+  .action(() => {
+    const { running, pid } = isDaemonRunning();
+    console.log(`Daemon: ${running ? `running (PID ${pid})` : 'stopped'}`);
+
+    const data = readStatusData();
+    const entries = Object.entries(data.endpoints);
+    if (entries.length === 0) {
+      console.log('No endpoint checks recorded yet.');
+      return;
+    }
+
+    console.log('');
+    for (const [name, entry] of entries) {
+      const icon = { ok: '✅', drift: '⚠️', down: '🔴', 'first-run': '🔵' }[entry.status] ?? '❓';
+      const when = new Date(entry.lastCheck).toLocaleString();
+      const extra = entry.reason ? ` (${entry.reason})` : '';
+      console.log(`${icon} ${name} — ${entry.status}${extra} — ${when}`);
+    }
   });
 
 program
@@ -200,6 +237,12 @@ program
         const result = await checkEndpoint(endpoint);
         if (result.isFirstRun) {
           console.log('  First run — snapshot saved, no alert.');
+        } else if (result.isDown) {
+          console.log(`  Endpoint down: ${result.downReason}`);
+          if (isBotReady() && config.telegram?.chat_id) {
+            await sendDownAlert(config.telegram.chat_id, endpoint, result.downReason ?? 'Unknown error');
+            console.log('  Telegram down alert sent.');
+          }
         } else if (result.hasDrift) {
           const { diff } = result;
           console.log('  Drift detected!');

@@ -6,10 +6,14 @@ import { createRequire } from 'module';
 import updateNotifier from 'update-notifier';
 import { input, select, confirm, password } from '@inquirer/prompts';
 import { loadConfig } from './config.js';
-import { initBot, sendDriftAlert, sendDownAlert, isBotReady } from './telegram.js';
+import { initBot } from './telegram.js';
 import { startScheduler } from './scheduler.js';
 import { startDaemon, stopDaemon, isDaemonRunning } from './daemon.js';
 import { readStatusData } from './status.js';
+import { notifyDrift, notifyDown, hasAlerts } from './notifier.js';
+import { appendHistory } from './history.js';
+import { deleteSnapshot } from './snapshot.js';
+import { startWebUI } from './webui.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json') as { name: string; version: string };
@@ -134,23 +138,40 @@ program
       addMore = await confirm({ message: 'Add another endpoint?', default: false });
     }
 
-    console.log('\n── Telegram alerts (optional) ──────────────\n');
+    console.log('\n── Alert channel (optional) ─────────────────\n');
 
-    const setupTelegram = await confirm({ message: 'Set up Telegram alerts now?', default: false });
-    let telegramSection = '';
+    const alertChannel = await select({
+      message: 'Set up alerts?',
+      choices: [
+        { name: 'Skip for now',  value: 'none' },
+        { name: 'Telegram',      value: 'telegram' },
+        { name: 'Slack',         value: 'slack' },
+        { name: 'Discord',       value: 'discord' },
+      ],
+    });
 
-    if (setupTelegram) {
+    let alertsSection = '';
+
+    if (alertChannel === 'telegram') {
       const token = await password({ message: 'Bot token:' });
       const chatId = await input({ message: 'Chat ID:', validate: v => v.trim() !== '' || 'Required' });
-      telegramSection = `telegram:\n  bot_token: '\${TELEGRAM_TOKEN}'\n  chat_id: '\${CHAT_ID}'\n\n`;
+      alertsSection = `alerts:\n  telegram:\n    bot_token: '\${TELEGRAM_TOKEN}'\n    chat_id: '\${CHAT_ID}'\n\n`;
       envVars['TELEGRAM_TOKEN'] = token;
       envVars['CHAT_ID'] = chatId;
+    } else if (alertChannel === 'slack') {
+      const webhookUrl = await input({ message: 'Slack webhook URL:', validate: v => v.startsWith('https://') || 'Must start with https://' });
+      alertsSection = `alerts:\n  slack:\n    webhook_url: '\${SLACK_WEBHOOK}'\n\n`;
+      envVars['SLACK_WEBHOOK'] = webhookUrl;
+    } else if (alertChannel === 'discord') {
+      const webhookUrl = await input({ message: 'Discord webhook URL:', validate: v => v.startsWith('https://') || 'Must start with https://' });
+      alertsSection = `alerts:\n  discord:\n    webhook_url: '\${DISCORD_WEBHOOK}'\n\n`;
+      envVars['DISCORD_WEBHOOK'] = webhookUrl;
     } else {
-      telegramSection = `# telegram: (optional — add bot_token and chat_id to enable alerts)\n#   bot_token: '\${TELEGRAM_TOKEN}'\n#   chat_id: '\${CHAT_ID}'\n\n`;
-      console.log('  Skipped. Add TELEGRAM_TOKEN and CHAT_ID to .env later to enable alerts.\n');
+      alertsSection = `# alerts: (optional — add telegram, slack, or discord to enable)\n#   telegram:\n#     bot_token: '\${TELEGRAM_TOKEN}'\n#     chat_id: '\${CHAT_ID}'\n\n`;
+      console.log('  Skipped. Add an alerts block to driftwatch.config.yml later.\n');
     }
 
-    const configContent = telegramSection + 'endpoints:\n' + endpoints.join('\n\n') + '\n';
+    const configContent = alertsSection + 'endpoints:\n' + endpoints.join('\n\n') + '\n';
     fs.writeFileSync(configDest, configContent);
     console.log('\n✓ Created driftwatch.config.yml');
 
@@ -184,7 +205,7 @@ program
       return;
     }
     const config = loadConfig(opts.config);
-    if (config.telegram?.bot_token) initBot(config.telegram.bot_token);
+    if (config.alerts?.telegram?.bot_token) initBot(config.alerts.telegram.bot_token);
     else console.log('[driftwatch] No Telegram configured — console-only mode.');
     console.log(`[driftwatch] Starting with ${config.endpoints.length} endpoint(s)...`);
     startScheduler(config);
@@ -224,14 +245,24 @@ program
   .command('check')
   .description('One-shot check all endpoints (no schedule)')
   .option('-c, --config <path>', 'Path to config file')
+  .option('-e, --endpoint <name>', 'Check only this endpoint by name')
   .action(async (opts) => {
     const config = loadConfig(opts.config);
-    if (config.telegram?.bot_token) initBot(config.telegram.bot_token);
-    else console.log('[driftwatch] No Telegram configured — console-only mode.\n');
+    if (config.alerts?.telegram?.bot_token) initBot(config.alerts.telegram.bot_token);
+    else if (!hasAlerts(config)) console.log('[driftwatch] No alerts configured — console-only mode.\n');
 
-    console.log(`[driftwatch] Checking ${config.endpoints.length} endpoint(s)...\n`);
+    const endpoints = opts.endpoint
+      ? config.endpoints.filter(e => e.name === opts.endpoint)
+      : config.endpoints;
 
-    for (const endpoint of config.endpoints) {
+    if (opts.endpoint && endpoints.length === 0) {
+      console.error(`Endpoint "${opts.endpoint}" not found in config.`);
+      process.exit(1);
+    }
+
+    console.log(`[driftwatch] Checking ${endpoints.length} endpoint(s)...\n`);
+
+    for (const endpoint of endpoints) {
       console.log(`Checking: ${endpoint.name}`);
       try {
         const result = await checkEndpoint(endpoint);
@@ -239,20 +270,17 @@ program
           console.log('  First run — snapshot saved, no alert.');
         } else if (result.isDown) {
           console.log(`  Endpoint down: ${result.downReason}`);
-          if (isBotReady() && config.telegram?.chat_id) {
-            await sendDownAlert(config.telegram.chat_id, endpoint, result.downReason ?? 'Unknown error');
-            console.log('  Telegram down alert sent.');
-          }
+          await notifyDown(config, endpoint, result.downReason ?? 'Unknown error');
+          if (hasAlerts(config)) console.log('  Alert sent.');
         } else if (result.hasDrift) {
           const { diff } = result;
           console.log('  Drift detected!');
           diff.added.forEach(e => console.log(`    + ${e.path} (${e.type})`));
           diff.removed.forEach(e => console.log(`    - ${e.path} (${e.type})`));
           diff.changed.forEach(e => console.log(`    ~ ${e.path}: ${e.from} → ${e.to}`));
-          if (isBotReady() && config.telegram?.chat_id) {
-            await sendDriftAlert(config.telegram.chat_id, result);
-            console.log('  Telegram alert sent.');
-          }
+          appendHistory(endpoint.name, endpoint.url, diff);
+          await notifyDrift(config, result);
+          if (hasAlerts(config)) console.log('  Alert sent.');
         } else {
           console.log('  No drift.');
         }
@@ -261,6 +289,26 @@ program
       }
       console.log('');
     }
+  });
+
+program
+  .command('reset <name>')
+  .description('Delete snapshot for an endpoint to force re-baseline on next check')
+  .action((name: string) => {
+    const deleted = deleteSnapshot(name);
+    if (deleted) {
+      console.log(`✓ Snapshot deleted for "${name}". Next check will create a new baseline.`);
+    } else {
+      console.log(`No snapshot found for "${name}".`);
+    }
+  });
+
+program
+  .command('ui')
+  .description('Start local web dashboard')
+  .option('-p, --port <number>', 'Port to listen on', '4573')
+  .action((opts) => {
+    startWebUI(parseInt(opts.port, 10));
   });
 
 program.parse();

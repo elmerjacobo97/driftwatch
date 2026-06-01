@@ -24,6 +24,13 @@ export function readSnapshot(endpointName: string): SnapshotFile | null {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as SnapshotFile;
 }
 
+export function deleteSnapshot(endpointName: string): boolean {
+  const file = snapshotPath(endpointName);
+  if (!fs.existsSync(file)) return false;
+  fs.unlinkSync(file);
+  return true;
+}
+
 export function writeSnapshot(endpointName: string, url: string, schema: SchemaValue): void {
   ensureDir();
   const snapshot: SnapshotFile = {

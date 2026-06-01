@@ -73,6 +73,20 @@ export interface CheckResult {
   diff: DiffResult;
 }
 
+function applyIgnoreFields(diff: DiffResult, ignoreFields: string[]): DiffResult {
+  if (!ignoreFields.length) return diff;
+  const ignored = new Set(ignoreFields);
+  const isIgnored = (p: string) => {
+    const last = p.split('.').pop() ?? p;
+    return ignored.has(last) || ignored.has(p);
+  };
+  return {
+    added: diff.added.filter(e => !isIgnored(e.path)),
+    removed: diff.removed.filter(e => !isIgnored(e.path)),
+    changed: diff.changed.filter(e => !isIgnored(e.path)),
+  };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -104,7 +118,8 @@ export async function checkEndpoint(endpoint: EndpointConfig): Promise<CheckResu
         return { endpoint, isFirstRun: true, hasDrift: false, isDown: false, diff: emptyDiff };
       }
 
-      const diff = diffSchemas(snapshot.schema, schema);
+      const rawDiff = diffSchemas(snapshot.schema, schema);
+      const diff = applyIgnoreFields(rawDiff, endpoint.ignore_fields ?? []);
       const hasDrift = diff.added.length > 0 || diff.removed.length > 0 || diff.changed.length > 0;
 
       if (hasDrift) writeSnapshot(endpoint.name, endpoint.url, schema);

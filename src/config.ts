@@ -40,5 +40,18 @@ export function loadConfig(configPath?: string): Config {
     if (!ep.method) ep.method = 'GET';
   }
 
+  // Normalize top-level telegram → alerts.telegram for backwards compat
+  if (resolved.telegram && !resolved.alerts?.telegram) {
+    resolved.alerts ??= {};
+    resolved.alerts.telegram = resolved.telegram;
+  }
+
+  // Parse alert_cooldown: support "30m", "2h", or plain number (minutes)
+  const cooldownRaw = (resolved as unknown as Record<string, unknown>)['alert_cooldown'];
+  if (typeof cooldownRaw === 'string') {
+    const match = cooldownRaw.match(/^(\d+)(m|h)?$/);
+    resolved.alert_cooldown = match ? parseInt(match[1], 10) * (match[2] === 'h' ? 60 : 1) : undefined;
+  }
+
   return resolved;
 }

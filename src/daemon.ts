@@ -10,6 +10,18 @@ export function startDaemon(configPath?: string): void {
   const args = ['start'];
   if (configPath) args.push('-c', configPath);
 
+  // Kill existing daemon before spawning to prevent accumulation
+  if (fs.existsSync(PID_FILE)) {
+    const oldPid = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
+    try {
+      process.kill(oldPid, 'SIGTERM');
+      console.log(`[driftwatch] Stopped existing daemon (PID ${oldPid}).`);
+    } catch {
+      // Process already gone
+    }
+    fs.unlinkSync(PID_FILE);
+  }
+
   fs.mkdirSync(DRIFTWATCH_DIR, { recursive: true });
   const out = fs.openSync(LOG_FILE, 'a');
 

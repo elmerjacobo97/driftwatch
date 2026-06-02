@@ -109,6 +109,15 @@ export function startWebUI(port = PORT): void {
     }
   });
 
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[driftwatch] Port ${port} already in use. Try: driftwatch ui --port 4574`);
+    } else {
+      console.error(`[driftwatch] Failed to start web UI: ${err.message}`);
+    }
+    process.exit(1);
+  });
+
   server.listen(port, () => {
     console.log(`[driftwatch] Web UI → http://localhost:${port}`);
     console.log('[driftwatch] Ctrl+C to stop.');

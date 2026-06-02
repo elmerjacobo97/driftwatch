@@ -171,8 +171,13 @@ CHAT_ID=your-chat-id
 
 ### Discord
 
-1. Server Settings → Integrations → Webhooks → New Webhook → Copy URL
-2. Add to `.env`: `DISCORD_WEBHOOK=https://discord.com/api/webhooks/...`
+1. Create a Discord server (or use an existing one)
+2. Create a text channel for alerts (e.g. `#driftwatch-alerts`)
+3. Right-click the channel → **Edit Channel** (in Spanish: **Editar canal**)
+4. **Integrations** → **Webhooks** → **New Webhook** → Copy URL
+5. Add to `.env`: `DISCORD_WEBHOOK=https://discord.com/api/webhooks/...`
+
+> No developer account needed. You must be the server owner or have "Manage Webhooks" permission.
 
 Without any alert channel configured, drift is logged to console only.
 

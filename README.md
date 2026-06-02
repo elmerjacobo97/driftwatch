@@ -165,9 +165,12 @@ CHAT_ID=your-chat-id
 
 ### Slack
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) → Create App → Incoming Webhooks → Activate → Add Webhook
-2. Copy the webhook URL
-3. Add to `.env`: `SLACK_WEBHOOK=https://hooks.slack.com/services/...`
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create an App** → **From scratch**
+2. Give it a name (e.g. `DriftWatch`) and select your workspace → **Create App**
+3. In the left menu → **Incoming Webhooks** → toggle **Activate Incoming Webhooks** on
+4. Scroll down → **Add New Webhook to Workspace** → select the channel → **Allow**
+5. Copy the webhook URL that appears
+6. Add to `.env`: `SLACK_WEBHOOK=https://hooks.slack.com/services/...`
 
 ### Discord
 
